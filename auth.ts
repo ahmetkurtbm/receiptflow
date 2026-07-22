@@ -18,7 +18,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientSecret:
         process.env.GATEHUB_CLIENT_SECRET ?? "receiptflow-not-configured",
       authorization: {
-        params: { scope: "openid profile email offline_access" },
+        params: {
+          scope: "openid profile email offline_access",
+          prompt: "select_account",
+        },
       },
       checks: ["pkce", "state"],
       profile(profile) {

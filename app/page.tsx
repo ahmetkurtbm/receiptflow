@@ -2,10 +2,11 @@
 
 import {
   AlertCircle, BarChart3, CalendarRange, Check, ChevronRight, CircleDollarSign,
-  CloudUpload, Download, Eye, FileCheck2, LayoutDashboard, LoaderCircle, Plus,
+  CloudUpload, Download, Eye, FileCheck2, LayoutDashboard, LoaderCircle, LogOut, Plus,
   ReceiptText, Search, Settings, Sparkles, Tag, Trash2, X
 } from "lucide-react";
 import { ChangeEvent, DragEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { logout } from "@/lib/auth-actions";
 import AdminPanel from "./components/AdminPanel";
 
 type FieldCategory = "merchant" | "document" | "tax" | "payment" | "classification" | "other";
@@ -293,7 +294,7 @@ export default function Home() {
       <section className="workspace">
         <header className="topbar">
           <div><p className="eyebrow">AI MASRAF YONETIMI</p><h1>{activeView === "new" ? "Dinamik fis analizi" : activeView === "records" ? "Fis kayitlari" : "Admin yonetimi"}</h1></div>
-          <div className="status-pill"><span /> {databaseActive ? "PostgreSQL bagli" : "Yerel kayit modu"}</div>
+          <div className="topbar-actions"><div className="status-pill"><span /> {databaseActive ? "PostgreSQL bagli" : "Yerel kayit modu"}</div><button className="icon-button" title="Cikis yap" onClick={() => logout()}><LogOut size={18} /></button></div>
         </header>
 
         {activeView === "new" ? (

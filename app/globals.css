@@ -16,6 +16,7 @@ button { cursor:pointer; }
 .sidebar-foot div { display:grid; gap:3px; }.sidebar-foot strong { color:#e6f2ed; font-size:12px; }.sidebar-foot span { color:#80958c; font-size:11px; }
 .workspace { min-width:0; }
 .topbar { min-height:92px; background:#fff; border-bottom:1px solid var(--line); padding:19px 38px; display:flex; align-items:center; justify-content:space-between; }
+.topbar-actions { display:flex; align-items:center; gap:12px; }
 .eyebrow { margin:0 0 4px; color:var(--green); font-size:10px; font-weight:800; letter-spacing:1.2px; }.topbar h1 { margin:0; font-size:25px; letter-spacing:0; }
 .status-pill { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); }.status-pill span { width:8px; height:8px; border-radius:50%; background:#35a66f; box-shadow:0 0 0 4px #e4f5ec; }
 .new-receipt-layout { display:grid; grid-template-columns:minmax(300px, 0.72fr) minmax(520px, 1.28fr); gap:22px; padding:26px 38px 45px; max-width:1500px; margin:0 auto; }
