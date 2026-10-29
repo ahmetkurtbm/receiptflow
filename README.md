@@ -2,6 +2,8 @@
 
 ReceiptFlow, fiş ve fatura görsellerini AI ile okuyup muhasebe alanlarını (tutar, tarih, kalem, KDV vb.) otomatik çıkaran, kullanıcının bu alanları düzenleyebildiği ve tüm kayıtları tek yerde topladığı bir finans asistanı uygulamasıdır.
 
+![Fiş analizi ekranı](docs/screenshots/ekran.png)
+
 ## Özellikler
 
 - **AI ile fiş/fatura okuma** — yüklenen görselden muhasebe alanlarının otomatik çıkarılması (Google Gemini, yapılandırılmış JSON çıktısı)
