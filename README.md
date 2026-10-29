@@ -4,19 +4,41 @@ ReceiptFlow, fiş ve fatura görsellerini AI ile okuyup muhasebe alanlarını (t
 
 ## Özellikler
 
-- **AI ile fiş/fatura okuma** — yüklenen görselden muhasebe alanlarının otomatik çıkarılması (OCR)
-- **Düzenlenebilir alanlar** — AI çıktısı hatalıysa kullanıcı elle düzeltebilir
-- **Tek yerde kayıt listesi** — filtreleme ve arama ile tüm fiş/fatura geçmişine erişim
-- **Kimlik doğrulama** — GateHub SSO ile giriş, her kullanıcının kayıtları kendisine özel
+- **AI ile fiş/fatura okuma** — yüklenen görselden muhasebe alanlarının otomatik çıkarılması (Google Gemini, yapılandırılmış JSON çıktısı)
+- **Dinamik alanlar** — sabit form yok; alanlar belgenin içeriğine göre oluşur, KDV kırılımı ve ürün satırları dahil
+- **Düzenlenebilir sonuç** — AI çıktısı hatalıysa kullanıcı düzeltir, alan ekler veya siler
+- **Toplu yükleme** — birden fazla fiş kuyruğa alınıp sırayla analiz edilir
+- **Kayıt listesi** — arama, para birimine göre toplamlar, JSON olarak dışa aktarma
+- **Hesap gerektirmez** — kayıtlar tarayıcıda (localStorage) tutulur
+
+## Çalışma modları
+
+| Mod | Ne zaman | Davranış |
+|---|---|---|
+| **Demo** | `GEMINI_API_KEY` boşken (Vercel) | Görsel analizi yerine hazır örnek fiş analizleri yüklenir; inceleme, düzenleme ve kayıt adımları aynen çalışır |
+| **Gerçek** | `GEMINI_API_KEY` tanımlıyken (yerel) | Yüklenen görseller Gemini ile analiz edilir |
+
+Sunucu tarafında yalnızca `/api/receipts/extract` vardır; API anahtarı tarayıcıya gönderilemeyeceği için
+analiz isteği sunucudan yapılır. Uç herkese açık olduğu için IP başına saatte 10, sunucu örneği başına
+günde 200 analizle sınırlıdır (`RECEIPTFLOW_IP_HOURLY_LIMIT`, `RECEIPTFLOW_DAILY_LIMIT`). Asıl güvence
+anahtarın kendisine Google AI Studio'da koyulan harcama sınırıdır; anahtarı Vercel'e eklemeden önce onu ayarlayın.
+
+## Kurulum
+
+```bash
+npm install
+echo GEMINI_API_KEY=... > .env.local   # boş bırakılırsa demo modu
+npm run dev
+```
 
 ## Teknoloji Yığını
 
 | Katman | Teknoloji |
 |---|---|
 | Uygulama | Next.js (App Router), TypeScript |
-| Kimlik | NextAuth → GateHub OIDC sağlayıcısı |
-| Veri | PostgreSQL |
+| Yapay zekâ | Google Gemini (görsel → JSON şema) |
+| Veri | Tarayıcı (localStorage) |
 
 ## Canlı Demo
 
-[receiptflow-eta.vercel.app](https://receiptflow-eta.vercel.app/)
+[receiptflow-ahmetkurt.vercel.app](https://receiptflow-ahmetkurt.vercel.app/)

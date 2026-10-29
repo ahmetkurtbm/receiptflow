@@ -46,6 +46,33 @@ const responseSchema = {
   required: ["documentType", "currency", "summary", "confidence", "fields", "lineItems"],
 };
 
+// The endpoint is public, so a leaked or scraped URL must not drain the AI
+// quota. Limits are per server instance (serverless instances don't share
+// memory): enough to stop casual abuse; the hard ceiling is the spending cap
+// set on the API key itself in Google AI Studio.
+const PER_IP_PER_HOUR = Number(process.env.RECEIPTFLOW_IP_HOURLY_LIMIT ?? 10);
+const PER_INSTANCE_PER_DAY = Number(process.env.RECEIPTFLOW_DAILY_LIMIT ?? 200);
+const hits = new Map<string, number[]>();
+let day = { date: "", count: 0 };
+
+function allow(ip: string) {
+  const now = Date.now();
+  const today = new Date(now).toISOString().slice(0, 10);
+  if (day.date !== today) day = { date: today, count: 0 };
+  if (day.count >= PER_INSTANCE_PER_DAY) return false;
+  const recent = (hits.get(ip) ?? []).filter((at) => now - at < 60 * 60 * 1000);
+  if (recent.length >= PER_IP_PER_HOUR) return false;
+  recent.push(now);
+  hits.set(ip, recent);
+  day.count += 1;
+  return true;
+}
+
+/** Lets the page know whether real AI analysis is available or it should run as a demo. */
+export function GET() {
+  return NextResponse.json({ configured: Boolean(process.env.GEMINI_API_KEY) });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -54,6 +81,11 @@ export async function POST(request: NextRequest) {
         { error: "Gercek AI analizi icin GEMINI_API_KEY tanimlanmamis. .env.local dosyasina anahtarinizi ekleyip sunucuyu yeniden baslatin.", code: "MISSING_API_KEY" },
         { status: 503 },
       );
+    }
+
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+    if (!allow(ip)) {
+      return NextResponse.json({ error: "Analiz sınırına ulaşıldı. Bir saat sonra tekrar deneyin ya da örnek fişlerle devam edin." }, { status: 429 });
     }
 
     const formData = await request.formData();

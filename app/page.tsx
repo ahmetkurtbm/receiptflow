@@ -2,29 +2,23 @@
 
 import {
   AlertCircle, BarChart3, CalendarRange, Check, ChevronRight, CircleDollarSign,
-  CloudUpload, Download, Eye, FileCheck2, LayoutDashboard, LoaderCircle, LogOut, Plus,
-  ReceiptText, Search, Settings, Sparkles, Tag, Trash2, X
+  CloudUpload, Download, Eye, FileCheck2, LayoutDashboard, LoaderCircle, Plus,
+  ReceiptText, Search, Sparkles, Tag, Trash2, X
 } from "lucide-react";
 import { ChangeEvent, DragEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { logout } from "@/lib/auth-actions";
-import AdminPanel from "./components/AdminPanel";
+import {
+  RECEIPT_GROUPS, SAMPLE_ANALYSES,
+  type DynamicField, type FieldCategory, type ReceiptAnalysis,
+} from "@/lib/samples";
 
-type FieldCategory = "merchant" | "document" | "tax" | "payment" | "classification" | "other";
-type FieldDataType = "text" | "number" | "currency" | "date" | "percentage";
-type DynamicField = {
-  id: string; key: string; label: string; value: string; description: string;
-  category: FieldCategory; dataType: FieldDataType; confidence: number; source: "receipt" | "inferred";
-};
-type LineItem = { description: string; quantity: string; unitPrice: string; vatRate: string; total: string };
-type ReceiptAnalysis = {
-  documentType: string; currency: string; summary: string; confidence: number;
-  fields: DynamicField[]; lineItems: LineItem[]; provider?: string; model?: string;
-};
+// Everything lives in the browser: records in localStorage, groups as a fixed
+// list. The only server code is the AI extraction route, because the API key
+// cannot be shipped to the client. Without a key the app runs as a demo on
+// the bundled sample analyses.
 type SavedReceipt = ReceiptAnalysis & {
   id: string; createdAt: string; fileName: string; totalAmount: number; savedCurrency: string;
   groupId?: string | null; groupName?: string | null;
 };
-type ReceiptGroup = { id: string; code: string; name: string; description: string };
 type BatchItem = {
   id: string; file: File; preview: string; status: "ready" | "analyzing" | "done" | "error" | "saved";
   analysis?: ReceiptAnalysis; error?: string;
@@ -89,7 +83,7 @@ const money = (value: number | string, currency = "TRY") => {
 };
 
 export default function Home() {
-  const [activeView, setActiveView] = useState<"new" | "records" | "admin">("new");
+  const [activeView, setActiveView] = useState<"new" | "records">("new");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
   const [analysis, setAnalysis] = useState<ReceiptAnalysis>(emptyAnalysis);
@@ -99,9 +93,10 @@ export default function Home() {
   const [dragging, setDragging] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string; setup?: boolean } | null>(null);
   const [search, setSearch] = useState("");
-  const [databaseActive, setDatabaseActive] = useState(false);
-  const [receiptGroups, setReceiptGroups] = useState<ReceiptGroup[]>([]);
-  const [selectedGroupId, setSelectedGroupId] = useState("");
+  const [aiReady, setAiReady] = useState<boolean | null>(null);
+  const [sampleName, setSampleName] = useState("");
+  const receiptGroups = RECEIPT_GROUPS;
+  const [selectedGroupId, setSelectedGroupId] = useState(RECEIPT_GROUPS[0].id);
   const [batchItems, setBatchItems] = useState<BatchItem[]>([]);
   const [currentBatchId, setCurrentBatchId] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
@@ -124,24 +119,14 @@ export default function Home() {
     }
   }, []);
   useEffect(() => {
-    Promise.all([
-      fetch("/api/receipts").then((response) => response.json()),
-      fetch("/api/receipt-groups").then((response) => response.json()),
-    ]).then(([receiptData, groupData]) => {
-      setDatabaseActive(Boolean(receiptData.configured));
-      if (receiptData.configured && Array.isArray(receiptData.records)) {
-        setRecords(receiptData.records);
-        localStorage.setItem("receiptflow-dynamic-records", JSON.stringify(receiptData.records));
-      }
-      if (Array.isArray(groupData.groups)) {
-        setReceiptGroups(groupData.groups);
-        if (groupData.groups.length) setSelectedGroupId(groupData.groups[0].id);
-      }
-    }).catch(() => setDatabaseActive(false));
+    fetch("/api/receipts/extract")
+      .then((response) => response.json())
+      .then((result) => setAiReady(Boolean(result.configured)))
+      .catch(() => setAiReady(false));
   }, []);
 
   const selectBatchItem = (item: BatchItem) => {
-    setCurrentBatchId(item.id); setFile(item.file); setPreview(item.preview);
+    setCurrentBatchId(item.id); setFile(item.file); setPreview(item.preview); setSampleName("");
     setAnalysis(item.analysis || emptyAnalysis()); setMessage(item.error ? { type: "error", text: item.error } : null);
   };
 
@@ -211,43 +196,30 @@ export default function Home() {
     const totalAmount = getReceiptTotal(analysis);
     if (totalAmount <= 0) { setMessage({ type: "error", text: "Fis toplam tutari bulunamadi. Toplam alanini kontrol edin." }); return; }
     const next: SavedReceipt = {
-      ...analysis, id: crypto.randomUUID(), createdAt: new Date().toISOString(), fileName: file?.name || "Belge",
+      ...analysis, id: crypto.randomUUID(), createdAt: new Date().toISOString(), fileName: file?.name || sampleName || "Belge",
       totalAmount, savedCurrency: normalizeCurrency(analysis.currency), groupId: selectedGroupId || null,
       groupName: receiptGroups.find((group) => group.id === selectedGroupId)?.name || null,
     };
-    let databaseSaveFailed = false;
-    if (databaseActive) {
-      try {
-        const response = await fetch("/api/receipts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(next),
-        });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error);
-        next.id = result.id; next.createdAt = result.createdAt;
-      } catch {
-        databaseSaveFailed = true;
-        setMessage({ type: "error", text: "Veritabani kaydi basarisiz; fis yerel onbellege kaydedildi." });
-      }
-    }
     const updated = [next, ...records]; setRecords(updated);
     localStorage.setItem("receiptflow-dynamic-records", JSON.stringify(updated));
     setBatchItems((current) => current.map((item) => item.id === currentBatchId ? { ...item, status: "saved" } : item));
-    if (!databaseSaveFailed) setMessage({ type: "success", text: databaseActive ? "Fis PostgreSQL ve yerel onbellege kaydedildi." : "Fis yerel onbellege kaydedildi." });
+    setMessage({ type: "success", text: "Fis bu tarayiciya kaydedildi." });
     const nextBatchItem = batchItems.find((item) => item.id !== currentBatchId && item.status === "done");
     if (nextBatchItem) selectBatchItem(nextBatchItem);
     else setTimeout(() => setActiveView("records"), 500);
   };
   const clearForm = () => {
     batchItems.forEach((item) => URL.revokeObjectURL(item.preview));
-    setBatchItems([]); setCurrentBatchId(""); setFile(null); setPreview(""); setAnalysis(emptyAnalysis()); setMessage(null);
+    setBatchItems([]); setCurrentBatchId(""); setFile(null); setPreview(""); setSampleName(""); setAnalysis(emptyAnalysis()); setMessage(null);
   };
-  const deleteRecord = async (id: string) => {
-    if (databaseActive) {
-      try { await fetch(`/api/receipts?id=${encodeURIComponent(id)}`, { method: "DELETE" }); }
-      catch { setMessage({ type: "error", text: "Veritabani kaydi silinemedi." }); return; }
-    }
+  const loadSample = (index: number) => {
+    clearForm();
+    const sample = SAMPLE_ANALYSES[index];
+    setSampleName(sample.fileName);
+    setAnalysis(structuredClone(sample.analysis));
+    setMessage({ type: "success", text: "Ornek analiz yuklendi. Alanlari duzenleyip kaydi olusturabilirsiniz." });
+  };
+  const deleteRecord = (id: string) => {
     const updated = records.filter((record) => record.id !== id); setRecords(updated);
     localStorage.setItem("receiptflow-dynamic-records", JSON.stringify(updated));
     if (selectedRecord?.id === id) setSelectedRecord(null);
@@ -286,21 +258,27 @@ export default function Home() {
         <nav aria-label="Ana menu">
           <button className={activeView === "new" ? "nav-item active" : "nav-item"} onClick={() => setActiveView("new")}><Plus size={19} /><span>Yeni fis</span></button>
           <button className={activeView === "records" ? "nav-item active" : "nav-item"} onClick={() => setActiveView("records")}><FileCheck2 size={19} /><span>Kayitlar</span><b>{records.length}</b></button>
-          <button className={activeView === "admin" ? "nav-item active" : "nav-item"} onClick={() => setActiveView("admin")}><Settings size={19} /><span>Admin</span></button>
         </nav>
-        <div className="sidebar-foot"><Sparkles size={18} /><div><strong>Google Gemini</strong><span>Dinamik belge analizi</span></div></div>
+        <div className="sidebar-foot"><Sparkles size={18} /><div><strong>{aiReady === false ? "Demo modu" : "Google Gemini"}</strong><span>{aiReady === false ? "Ornek analizlerle" : "Dinamik belge analizi"}</span></div></div>
       </aside>
 
       <section className="workspace">
         <header className="topbar">
-          <div><p className="eyebrow">AI MASRAF YONETIMI</p><h1>{activeView === "new" ? "Dinamik fis analizi" : activeView === "records" ? "Fis kayitlari" : "Admin yonetimi"}</h1></div>
-          <div className="topbar-actions"><div className="status-pill"><span /> {databaseActive ? "PostgreSQL bagli" : "Yerel kayit modu"}</div><button className="icon-button" title="Cikis yap" onClick={() => logout()}><LogOut size={18} /></button></div>
+          <div><p className="eyebrow">AI MASRAF YONETIMI</p><h1>{activeView === "new" ? "Dinamik fis analizi" : "Fis kayitlari"}</h1></div>
+          <div className="topbar-actions"><div className="status-pill"><span /> Kayitlar bu tarayicida</div></div>
         </header>
 
         {activeView === "new" ? (
           <div className="new-receipt-layout">
             <section className="upload-column">
               <div className="section-heading"><div><span className="step">1</span><h2>Fis gorselini yukleyin</h2></div><p>JPG, PNG, WEBP · En fazla 10 MB</p></div>
+              {aiReady === false && (
+                <div className="demo-box">
+                  <strong>Demo modu</strong>
+                  <p>Bu surumde yapay zeka anahtari tanimli degil. Hazir bir ornek fis analizini yukleyip inceleme ve kayit adimlarini deneyebilirsiniz.</p>
+                  <div>{SAMPLE_ANALYSES.map((sample, index) => <button type="button" key={sample.fileName} onClick={() => loadSample(index)}>{sample.analysis.documentType}</button>)}</div>
+                </div>
+              )}
               {!file ? (
                 <button className={dragging ? "dropzone dragging" : "dropzone"} onClick={() => fileInput.current?.click()}
                   onDragOver={(e: DragEvent) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)}
@@ -377,7 +355,7 @@ export default function Home() {
               </section>
             </div>}
           </section>
-        ) : <AdminPanel />}
+        ) : null}
       </section>
     </main>
   );
