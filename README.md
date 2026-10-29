@@ -23,6 +23,17 @@ analiz isteği sunucudan yapılır. Uç herkese açık olduğu için IP başına
 günde 200 analizle sınırlıdır (`RECEIPTFLOW_IP_HOURLY_LIMIT`, `RECEIPTFLOW_DAILY_LIMIT`). Asıl güvence
 anahtarın kendisine Google AI Studio'da koyulan harcama sınırıdır; anahtarı Vercel'e eklemeden önce onu ayarlayın.
 
+## Vercel'de gerçek analizi açmak
+
+Vercel'deki sürüm varsayılan olarak demo modunda çalışır. Gerçek fiş analizi için:
+
+1. Google AI Studio'da API anahtarına **harcama sınırı** koyun (uç herkese açık olduğundan asıl koruma budur).
+2. Vercel → proje → Settings → Environment Variables → `GEMINI_API_KEY` ekleyin (Production).
+3. Deployments → son dağıtım → **Redeploy**.
+
+Başka ortam değişkeni gerekmez; `GEMINI_MODEL` (varsayılan `gemini-2.5-flash`), `RECEIPTFLOW_IP_HOURLY_LIMIT` ve
+`RECEIPTFLOW_DAILY_LIMIT` isteğe bağlıdır.
+
 ## Kurulum
 
 ```bash
