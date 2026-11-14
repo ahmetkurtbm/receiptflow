@@ -44,6 +44,12 @@ echo GEMINI_API_KEY=... > .env.local   # boş bırakılırsa demo modu
 npm run dev
 ```
 
+## Güvenlik ve sınırlar
+
+- Yapay zekâ ucu IP başına saatte 10, sunucu örneği başına günde 200 istekle sınırlıdır (`RECEIPTFLOW_IP_HOURLY_LIMIT`, `RECEIPTFLOW_DAILY_LIMIT`). Geçersiz istekler (dosyasız, görsel olmayan, büyük) kotayı harcamaz.
+- İstek gövdesi 4,4 MB'ı aşarsa 413 döner (Vercel 4,5 MB'ı zaten reddeder); sayaç haritası gün değişince temizlenir.
+- Bu uç Gemini'ye gittiği için yük testi yapılmadı; sınırlar birim testlerle doğrulanır. Gerçek harcamanın tek kesin üst sınırı Google AI Studio'daki bütçe sınırıdır.
+
 ## Teknoloji Yığını
 
 | Katman | Teknoloji |
