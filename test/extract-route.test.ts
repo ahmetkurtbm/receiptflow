@@ -69,27 +69,76 @@ describe("POST doğrulama", () => {
 });
 
 describe("POST hız sınırı", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", async () => geminiResult({ documentType: "Fiş", fields: [], lineItems: [] }));
+  });
+
   it("IP başına saatlik sınırı uygular, diğer IP'leri etkilemez", async () => {
     vi.stubEnv("RECEIPTFLOW_IP_HOURLY_LIMIT", "2");
     const { POST } = await loadRoute();
-    expect((await POST(upload(undefined, "1.1.1.1"))).status).toBe(400);
-    expect((await POST(upload(undefined, "1.1.1.1"))).status).toBe(400);
-    expect((await POST(upload(undefined, "1.1.1.1"))).status).toBe(429);
-    expect((await POST(upload(undefined, "2.2.2.2"))).status).toBe(400);
+    expect((await POST(upload(image(), "1.1.1.1"))).status).toBe(200);
+    expect((await POST(upload(image(), "1.1.1.1"))).status).toBe(200);
+    expect((await POST(upload(image(), "1.1.1.1"))).status).toBe(429);
+    expect((await POST(upload(image(), "2.2.2.2"))).status).toBe(200);
   });
 
   it("günlük toplam sınırı uygular", async () => {
     vi.stubEnv("RECEIPTFLOW_DAILY_LIMIT", "1");
     const { POST } = await loadRoute();
-    expect((await POST(upload(undefined, "1.1.1.1"))).status).toBe(400);
-    expect((await POST(upload(undefined, "2.2.2.2"))).status).toBe(429);
+    expect((await POST(upload(image(), "1.1.1.1"))).status).toBe(200);
+    expect((await POST(upload(image(), "2.2.2.2"))).status).toBe(429);
   });
 
   it("zincirli x-forwarded-for başlığında ilk IP'yi sayar", async () => {
     vi.stubEnv("RECEIPTFLOW_IP_HOURLY_LIMIT", "1");
     const { POST } = await loadRoute();
-    await POST(upload(undefined, "1.1.1.1, 9.9.9.9"));
-    expect((await POST(upload(undefined, "1.1.1.1, 8.8.8.8"))).status).toBe(429);
+    await POST(upload(image(), "1.1.1.1, 9.9.9.9"));
+    expect((await POST(upload(image(), "1.1.1.1, 8.8.8.8"))).status).toBe(429);
+  });
+
+  it("geçersiz istekler kota harcamaz", async () => {
+    vi.stubEnv("RECEIPTFLOW_IP_HOURLY_LIMIT", "1");
+    vi.stubEnv("RECEIPTFLOW_DAILY_LIMIT", "1");
+    const { POST } = await loadRoute();
+    const pdf = new File(["x"], "fatura.pdf", { type: "application/pdf" });
+    expect((await POST(upload(undefined, "1.1.1.1"))).status).toBe(400);
+    expect((await POST(upload(pdf, "1.1.1.1"))).status).toBe(400);
+    expect((await POST(upload(image(10 * 1024 * 1024 + 1), "1.1.1.1"))).status).toBe(400);
+    expect((await POST(upload(image(), "1.1.1.1"))).status).toBe(200);
+  });
+
+  it("gün değişince sayaçlar sıfırlanır", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-01-01T12:00:00Z"));
+      vi.stubEnv("RECEIPTFLOW_IP_HOURLY_LIMIT", "1");
+      const { POST } = await loadRoute();
+      expect((await POST(upload(image(), "1.1.1.1"))).status).toBe(200);
+      expect((await POST(upload(image(), "1.1.1.1"))).status).toBe(429);
+      vi.setSystemTime(new Date("2026-01-02T12:00:00Z"));
+      expect((await POST(upload(image(), "1.1.1.1"))).status).toBe(200);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("POST content-length", () => {
+  it("4,4 MB üstü gövdeyi 413 ile reddeder, Gemini'ye gitmez ve kota harcamaz", async () => {
+    const fetchMock = vi.fn(async () => geminiResult({ documentType: "Fiş", fields: [], lineItems: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("RECEIPTFLOW_IP_HOURLY_LIMIT", "1");
+    const { POST } = await loadRoute();
+    const big = new NextRequest(ROUTE_URL, {
+      method: "POST",
+      body: new FormData(),
+      headers: { "x-forwarded-for": "1.1.1.1", "content-length": String(5 * 1024 * 1024) },
+    });
+    const response = await POST(big);
+    expect(response.status).toBe(413);
+    expect((await response.json()).error).toContain("kucultup");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect((await POST(upload(image(), "1.1.1.1"))).status).toBe(200);
   });
 });
 

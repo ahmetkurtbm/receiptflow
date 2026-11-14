@@ -54,11 +54,15 @@ const PER_IP_PER_HOUR = Number(process.env.RECEIPTFLOW_IP_HOURLY_LIMIT ?? 10);
 const PER_INSTANCE_PER_DAY = Number(process.env.RECEIPTFLOW_DAILY_LIMIT ?? 200);
 const hits = new Map<string, number[]>();
 let day = { date: "", count: 0 };
+const MAX_BODY_BYTES = 4.4 * 1024 * 1024;
 
 function allow(ip: string) {
   const now = Date.now();
   const today = new Date(now).toISOString().slice(0, 10);
-  if (day.date !== today) day = { date: today, count: 0 };
+  if (day.date !== today) {
+    day = { date: today, count: 0 };
+    hits.clear();
+  }
   if (day.count >= PER_INSTANCE_PER_DAY) return false;
   const recent = (hits.get(ip) ?? []).filter((at) => now - at < 60 * 60 * 1000);
   if (recent.length >= PER_IP_PER_HOUR) return false;
@@ -83,9 +87,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
-    if (!allow(ip)) {
-      return NextResponse.json({ error: "Analiz sınırına ulaşıldı. Bir saat sonra tekrar deneyin ya da örnek fişlerle devam edin." }, { status: 429 });
+    // Vercel rejects bodies over 4.5 MB itself; answer with a readable message first.
+    if (Number(request.headers.get("content-length")) > MAX_BODY_BYTES) {
+      return NextResponse.json({ error: "Gorsel cok buyuk. Gorseli kucultup tekrar deneyin." }, { status: 413 });
     }
 
     const formData = await request.formData();
@@ -98,6 +102,12 @@ export async function POST(request: NextRequest) {
     }
     if (file.size > 10 * 1024 * 1024) {
       return NextResponse.json({ error: "Dosya boyutu 10 MB'dan kucuk olmalidir." }, { status: 400 });
+    }
+
+    // Counted only once the upload is valid, so rejected requests cost no quota.
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+    if (!allow(ip)) {
+      return NextResponse.json({ error: "Analiz sınırına ulaşıldı. Bir saat sonra tekrar deneyin ya da örnek fişlerle devam edin." }, { status: 429 });
     }
 
     const bytes = Buffer.from(await file.arrayBuffer());
