@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ReceiptFlow">
+  <rect width="512" height="512" rx="112" fill="#14532d"/>
+  <path d="M136 96H376V424L346 396 316 424 286 396 256 424 226 396 196 424 166 396 136 424Z" fill="#ffffff" stroke="#ffffff" stroke-width="12" stroke-linejoin="round"/>
+  <g fill="#14532d">
+    <rect x="176" y="156" width="160" height="22" rx="11"/>
+    <rect x="176" y="208" width="160" height="22" rx="11"/>
+    <rect x="176" y="260" width="104" height="22" rx="11"/>
+    <rect x="176" y="324" width="160" height="30" rx="15"/>
+  </g>
+</svg>
